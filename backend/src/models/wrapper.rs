@@ -37,80 +37,22 @@ impl ColumnRes{
         }
     }
 
+    /// Catatan refactoring: sebelumnya fungsi ini (dan `get_duration`) memiliki
+    /// implementasi parsing waktu sendiri yang terduplikasi dengan
+    /// `models::ext::parse_time_block`, dan menggunakan `.unwrap()` yang bisa
+    /// menyebabkan panic jika format input tidak sesuai. Logic ini sekarang
+    /// didelegasikan ke `models::time_parser`, satu sumber kebenaran yang aman
+    /// (mengembalikan default 0 jika parsing gagal, alih-alih crash).
     fn get_start_time(time: &str) -> u16 {
-        let start_part = time.trim().split(" - ").next().unwrap_or("");
-        let full_time = time.trim();
-        let am_pm = if full_time.ends_with("AM") {
-            "AM"
-        } else if full_time.ends_with("PM") {
-            "PM"
-        } else {
-            ""
-        };
-        let hour_str = start_part.split(':').next()
-            .or_else(|| start_part.split('-').next())
-            .unwrap_or("0")
-            .trim();
-
-        let hour = hour_str.parse::<u16>().unwrap_or(0);
-
-        match am_pm {
-            "PM" => {
-                if hour == 12 {
-                    12
-                } else {
-                    hour + 12
-                }
-            },
-            "AM" => {
-                if hour == 12 {
-                    0
-                } else {
-                    hour
-                }
-            },
-            _ => hour
-        }
+        crate::models::time_parser::parse_time_range(time)
+            .map(|(start_hour, _duration)| start_hour as u16)
+            .unwrap_or(0)
     }
 
     fn get_duration(time: &str) -> u16 {
-        let parts: Vec<&str> = time.split(" - ").collect();
-        let start_time = parts[0].trim();
-        let end_time = parts[1].trim();
-
-        fn parse_time(time_str: &str) -> u16 {
-            let (time_part, period) = if time_str.contains(" ") {
-                let parts: Vec<&str> = time_str.split_whitespace().collect();
-                (parts[0], parts[1])
-            } else {
-                if time_str.ends_with("AM") {
-                    (&time_str[..time_str.len()-2], "AM")
-                } else {
-                    (&time_str[..time_str.len()-2], "PM")
-                }
-            };
-
-            let time_components: Vec<&str> = time_part.split(':').collect();
-            let hours: u16 = time_components[0].parse().unwrap();
-            let minutes: u16 = time_components[1].parse().unwrap();
-
-            let total_minutes = match period {
-                "AM" => if hours == 12 { minutes } else { hours * 60 + minutes },
-                "PM" => if hours == 12 { 12 * 60 + minutes } else { (hours + 12) * 60 + minutes },
-                _ => hours * 60 + minutes,
-            };
-
-            total_minutes
-        }
-
-        let start_minutes = parse_time(start_time);
-        let end_minutes = parse_time(end_time);
-
-        if end_minutes >= start_minutes {
-            end_minutes - start_minutes
-        } else {
-            (24 * 60) - start_minutes + end_minutes
-        }
+        crate::models::time_parser::parse_time_range(time)
+            .map(|(_start_hour, duration)| duration as u16)
+            .unwrap_or(0)
     }
 
     pub fn frm_json(time : &str , slots: &Vec<String>) ->Self {
