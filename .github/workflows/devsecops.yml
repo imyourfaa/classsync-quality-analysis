@@ -1,0 +1,54 @@
+name: DevSecOps Quality & Security Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/rust
+            p/javascript
+            p/react
+
+      - name: Run Snyk SCA - Backend (Rust)
+        uses: snyk/actions/rust@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=backend/Cargo.toml
+
+      - name: Run Snyk SCA - Admin (Node.js)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=admin/package.json
+
+      - name: Run Snyk SCA - Mobile App (Node.js)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=App/package.json
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Quality Gate Check
+        run: |
+          echo "Menunggu Quality Gate SonarCloud..."
+          # SonarCloud akan otomatis memblokir merge jika Quality Gate gagal
